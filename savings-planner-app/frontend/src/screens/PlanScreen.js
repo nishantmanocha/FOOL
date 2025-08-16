@@ -269,27 +269,132 @@ const PlanScreen = ({ navigation }) => {
     );
   };
 
+  const getInvestmentRecommendation = (option, goalMonths) => {
+    const goalYears = goalMonths / 12;
+    const instrument = option.name;
+    const rate = option.annualRate;
+    
+    let recommendation = {
+      suitable: true,
+      reasons: [],
+      warnings: [],
+      priority: 'medium'
+    };
+
+    // Goal duration analysis
+    if (goalYears <= 3) {
+      if (['Fixed Deposit', 'Recurring Deposit'].includes(instrument)) {
+        recommendation.reasons.push('✅ Ideal for short-term goals (≤3 years)');
+        recommendation.reasons.push('✅ Capital protection guaranteed');
+        recommendation.priority = 'high';
+      } else if (['Mutual Funds', 'Nifty ETF'].includes(instrument)) {
+        recommendation.warnings.push('⚠️ High volatility risk for short-term goals');
+        recommendation.suitable = false;
+      }
+    } else if (goalYears <= 7) {
+      if (['Mutual Funds', 'Gold ETF'].includes(instrument)) {
+        recommendation.reasons.push('✅ Good for medium-term goals (3-7 years)');
+        recommendation.priority = 'high';
+      }
+    } else {
+      if (['PPF', 'Nifty ETF', 'Mutual Funds', 'Sovereign Gold Bond'].includes(instrument)) {
+        recommendation.reasons.push('✅ Excellent for long-term goals (≥7 years)');
+        recommendation.priority = 'high';
+      }
+    }
+
+    // Return rate analysis
+    if (rate >= 10) {
+      recommendation.reasons.push('✅ High expected returns');
+      recommendation.reasons.push('✅ Better inflation protection');
+    } else if (rate <= 7) {
+      recommendation.reasons.push('✅ Stable & predictable returns');
+    }
+
+    // Risk & Security analysis
+    if (['PPF', 'Fixed Deposit', 'Recurring Deposit'].includes(instrument)) {
+      recommendation.reasons.push('✅ Government backed / Low risk');
+      recommendation.reasons.push('✅ Capital protection guaranteed');
+    } else if (['Sovereign Gold Bond'].includes(instrument)) {
+      recommendation.reasons.push('✅ Government guaranteed');
+      recommendation.reasons.push('✅ Additional 2.5% interest + gold appreciation');
+    } else if (['Mutual Funds', 'Nifty ETF'].includes(instrument)) {
+      recommendation.warnings.push('⚠️ Market risk - returns not guaranteed');
+      recommendation.reasons.push('✅ Historically beats inflation');
+    }
+
+    // Liquidity analysis
+    if (instrument === 'PPF') {
+      recommendation.warnings.push('⚠️ 15-year lock-in period');
+      recommendation.reasons.push('✅ Tax-free returns (EEE benefit)');
+    } else if (['Mutual Funds', 'Nifty ETF', 'Gold ETF'].includes(instrument)) {
+      recommendation.reasons.push('✅ High liquidity - can exit anytime');
+      recommendation.reasons.push('✅ Flexible SIP amounts');
+    } else if (['Fixed Deposit', 'Recurring Deposit'].includes(instrument)) {
+      recommendation.warnings.push('⚠️ Early exit penalty applies');
+    }
+
+    // Tax benefits
+    if (instrument === 'PPF') {
+      recommendation.reasons.push('✅ 80C deduction + tax-free growth & withdrawal');
+    } else if (instrument === 'Sovereign Gold Bond') {
+      recommendation.reasons.push('✅ Tax-free if held till maturity (8 years)');
+    }
+
+    return recommendation;
+  };
+
   const renderInvestmentOptions = () => {
     if (!investmentData) return null;
 
+    const goalMonths = parseFloat(goal) / (calculatedData?.savingsPerMonth || 1);
+
     return (
       <View style={styles.resultsSection}>
-        <Text style={styles.sectionTitle}>Investment Options Timeline</Text>
+        <Text style={styles.sectionTitle}>Investment Options Analysis</Text>
         
-        {investmentData.comparisonVsSavings.map((option, index) => (
-          <View key={index} style={styles.investmentCard}>
-            <View style={styles.investmentHeader}>
-              <Text style={styles.investmentName}>{option.name}</Text>
-              <Text style={styles.investmentRate}>{option.annualRate}% p.a.</Text>
-            </View>
-            <Text style={styles.investmentTime}>
-              {formatTimeToGoal(option.timeToGoalMonths)}
-            </Text>
-            <Text style={styles.timeSaved}>
-              {option.timeSaved > 0 && `${option.timeSaved} months faster`}
-            </Text>
-          </View>
-        ))}
+        <View style={styles.investmentGrid}>
+          {investmentData.comparisonVsSavings.map((option, index) => {
+            const recommendation = getInvestmentRecommendation(option, goalMonths);
+            return (
+              <View key={index} style={[
+                styles.investmentCard,
+                recommendation.priority === 'high' && styles.investmentCardRecommended,
+                !recommendation.suitable && styles.investmentCardNotSuitable
+              ]}>
+                <View style={styles.investmentHeader}>
+                  <Text style={styles.investmentName}>{option.name}</Text>
+                  <Text style={styles.investmentRate}>{option.annualRate}% p.a.</Text>
+                </View>
+                
+                <Text style={styles.investmentTime}>
+                  {formatTimeToGoal(option.timeToGoalMonths)}
+                </Text>
+                
+                {option.timeSaved > 0 && (
+                  <Text style={styles.timeSaved}>
+                    {option.timeSaved} months faster
+                  </Text>
+                )}
+
+                {recommendation.priority === 'high' && (
+                  <View style={styles.recommendedBadge}>
+                    <Text style={styles.recommendedBadgeText}>RECOMMENDED</Text>
+                  </View>
+                )}
+
+                <View style={styles.reasonsContainer}>
+                  {recommendation.reasons.slice(0, 2).map((reason, idx) => (
+                    <Text key={idx} style={styles.reasonText}>{reason}</Text>
+                  ))}
+                  {recommendation.warnings.slice(0, 1).map((warning, idx) => (
+                    <Text key={idx} style={styles.warningText}>{warning}</Text>
+                  ))}
+                </View>
+              </View>
+            );
+          })}
+        </View>
       </View>
     );
   };
@@ -382,26 +487,26 @@ const PlanScreen = ({ navigation }) => {
   const renderCurrentRates = () => (
     <View style={styles.ratesSection}>
       <View style={styles.ratesHeader}>
-        <Text style={styles.sectionTitle}>Current Market Rates</Text>
-        <TouchableOpacity style={styles.editButton} onPress={handleEditRates}>
-          <Edit3 size={16} color="#3B82F6" />
-          <Text style={styles.editButtonText}>Edit</Text>
+        <Text style={styles.ratesSectionTitle}>Current Market Rates</Text>
+        <TouchableOpacity style={styles.editRatesButton} onPress={handleEditRates}>
+          <Edit3 size={14} color="#3B82F6" />
+          <Text style={styles.editRatesText}>Edit Rates</Text>
         </TouchableOpacity>
       </View>
       
-      <View style={styles.ratesGrid}>
+      <View style={styles.ratesCompact}>
         {Object.entries(state.settings.investmentRates).map(([key, rate]) => (
-          <View key={key} style={styles.rateCard}>
-            <Text style={styles.rateName}>
+          <View key={key} style={styles.rateItem}>
+            <Text style={styles.rateItemName}>
               {key === 'ppf' ? 'PPF' :
-               key === 'fd' ? 'Fixed Deposit' :
-               key === 'rd' ? 'Recurring Deposit' :
+               key === 'fd' ? 'FD' :
+               key === 'rd' ? 'RD' :
                key === 'mutualFunds' ? 'Mutual Funds' :
                key === 'niftyETF' ? 'Nifty ETF' :
                key === 'goldETF' ? 'Gold ETF' :
-               key === 'sgb' ? 'Sovereign Gold Bond' : key}
+               key === 'sgb' ? 'SGB' : key}
             </Text>
-            <Text style={styles.rateValue}>{rate}% p.a.</Text>
+            <Text style={styles.rateItemValue}>{rate}%</Text>
           </View>
         ))}
       </View>
@@ -478,9 +583,6 @@ const PlanScreen = ({ navigation }) => {
         {/* Always show input form */}
         {renderInputForm()}
 
-        {/* Always show current market rates */}
-        {renderCurrentRates()}
-
         {/* Show results only after calculation */}
         {calculatedData && (
           <>
@@ -490,6 +592,9 @@ const PlanScreen = ({ navigation }) => {
             {renderTips()}
           </>
         )}
+
+        {/* Always show current market rates at bottom */}
+        {renderCurrentRates()}
       </ScrollView>
 
       {/* Rates editing modal */}
@@ -639,40 +744,88 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6B7280',
   },
+  investmentGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
   investmentCard: {
-    backgroundColor: '#f0fdf4',
-    padding: 16,
+    backgroundColor: '#f8fafc',
+    padding: 12,
     borderRadius: 8,
     marginBottom: 12,
-    borderLeftWidth: 4,
-    borderLeftColor: '#10b981',
+    width: '48%',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    position: 'relative',
+  },
+  investmentCardRecommended: {
+    backgroundColor: '#f0fdf4',
+    borderColor: '#10b981',
+    borderWidth: 2,
+  },
+  investmentCardNotSuitable: {
+    backgroundColor: '#fef2f2',
+    borderColor: '#fca5a5',
   },
   investmentHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   investmentName: {
-    fontSize: 16,
+    fontSize: 13,
     fontWeight: '600',
     color: '#374151',
+    flex: 1,
   },
   investmentRate: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#059669',
     fontWeight: '500',
   },
   investmentTime: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#065f46',
     marginBottom: 4,
   },
   timeSaved: {
-    fontSize: 14,
+    fontSize: 11,
     color: '#059669',
     fontWeight: '500',
+    marginBottom: 6,
+  },
+  recommendedBadge: {
+    position: 'absolute',
+    top: -1,
+    right: -1,
+    backgroundColor: '#10b981',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderTopRightRadius: 8,
+    borderBottomLeftRadius: 8,
+  },
+  recommendedBadgeText: {
+    fontSize: 8,
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  reasonsContainer: {
+    marginTop: 6,
+  },
+  reasonText: {
+    fontSize: 10,
+    color: '#059669',
+    marginBottom: 2,
+    lineHeight: 14,
+  },
+  warningText: {
+    fontSize: 10,
+    color: '#dc2626',
+    marginBottom: 2,
+    lineHeight: 14,
   },
   chartContainer: {
     backgroundColor: '#fff',
@@ -736,59 +889,61 @@ const styles = StyleSheet.create({
   },
   ratesSection: {
     backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 8,
+    padding: 12,
     marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
   },
   ratesHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 10,
   },
-  editButton: {
+  ratesSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  editRatesButton: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#eff6ff',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
   },
-  editButtonText: {
+  editRatesText: {
     color: '#3B82F6',
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '500',
-    marginLeft: 4,
+    marginLeft: 3,
   },
-  ratesGrid: {
+  ratesCompact: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
   },
-  rateCard: {
-    backgroundColor: '#f8fafc',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 8,
-    width: '48%',
+  rateItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  rateName: {
-    fontSize: 12,
-    color: '#64748b',
-    textAlign: 'center',
+    backgroundColor: '#f8fafc',
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: 4,
     marginBottom: 4,
+    width: '48%',
   },
-  rateValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
+  rateItemName: {
+    fontSize: 11,
+    color: '#64748b',
+    fontWeight: '500',
+  },
+  rateItemValue: {
+    fontSize: 12,
+    fontWeight: '600',
     color: '#3B82F6',
   },
   modalOverlay: {
