@@ -62,11 +62,7 @@ const CompareScreen = ({ navigation }) => {
     }
   }, [state.user.income, state.user.expenses]);
 
-  useEffect(() => {
-    if (monthlyContribution && goalAmount) {
-      loadComparisonData();
-    }
-  }, [monthlyContribution, goalAmount, selectedHorizon, selectedInstruments]);
+  // Removed auto-loading - now only loads on manual calculation
 
   const loadComparisonData = async () => {
     if (!monthlyContribution || !goalAmount) return;
@@ -346,6 +342,7 @@ const CompareScreen = ({ navigation }) => {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Input Section */}
         <View style={styles.inputSection}>
+          <Text style={styles.sectionTitle}>Investment Comparison Calculator</Text>
           <View style={styles.inputRow}>
             <View style={styles.inputContainer}>
               <Text style={styles.inputLabel}>Goal Amount</Text>
@@ -375,23 +372,32 @@ const CompareScreen = ({ navigation }) => {
               </View>
             </View>
           </View>
+          
+          <TouchableOpacity 
+            style={styles.calculateButton} 
+            onPress={loadComparisonData}
+            disabled={loading || !monthlyContribution || !goalAmount}
+          >
+            {loading ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <>
+                <BarChart3 size={20} color="#fff" />
+                <Text style={styles.calculateButtonText}>Compare Investments</Text>
+              </>
+            )}
+          </TouchableOpacity>
         </View>
 
-        {/* Horizon Selector */}
-        {renderHorizonSelector()}
-
-        {/* Instrument Selector */}
-        {renderInstrumentSelector()}
-
-        {loading && (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#3B82F6" />
-            <Text style={styles.loadingText}>Calculating projections...</Text>
-          </View>
-        )}
-
-        {!loading && (
+        {/* Show results only after comparison data is loaded */}
+        {comparisonData && (
           <>
+            {/* Horizon Selector */}
+            {renderHorizonSelector()}
+
+            {/* Instrument Selector */}
+            {renderInstrumentSelector()}
+
             {/* Line Chart */}
             {renderLineChart()}
 
@@ -449,6 +455,28 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  calculateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#3B82F6',
+    paddingVertical: 14,
+    borderRadius: 8,
+    marginTop: 16,
+  },
+  calculateButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
   },
   inputRow: {
     flexDirection: 'row',

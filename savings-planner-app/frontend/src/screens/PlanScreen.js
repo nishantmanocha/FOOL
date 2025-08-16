@@ -5,9 +5,10 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  RefreshControl,
+  TextInput,
   Alert,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -17,9 +18,10 @@ import {
   TrendingUp,
   Calendar,
   DollarSign,
-  Edit3,
+  Calculator,
   Lightbulb,
   Clock,
+  Target,
 } from 'lucide-react-native';
 import { LineChart } from 'react-native-chart-kit';
 import { useApp } from '../context/AppContext';
@@ -28,54 +30,89 @@ import api from '../services/api';
 const { width } = Dimensions.get('window');
 
 const PlanScreen = ({ navigation }) => {
-  const { state, calculateSurplus } = useApp();
-  const [savingsData, setSavingsData] = useState(null);
+  const { state, dispatch, actions } = useApp();
+  const [salary, setSalary] = useState(state.user.income?.toString() || '');
+  const [goal, setGoal] = useState('100000');
+  const [expenses, setExpenses] = useState({
+    rent: state.user.expenses?.rent?.toString() || '',
+    emi: state.user.expenses?.emi?.toString() || '',
+    food: state.user.expenses?.food?.toString() || '',
+    transport: state.user.expenses?.transport?.toString() || '',
+    utilities: state.user.expenses?.utilities?.toString() || '',
+    entertainment: state.user.expenses?.entertainment?.toString() || '',
+    other: state.user.expenses?.other?.toString() || '',
+  });
+  
+  const [calculatedData, setCalculatedData] = useState(null);
   const [investmentData, setInvestmentData] = useState(null);
   const [tips, setTips] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [surplus, setSurplus] = useState(0);
 
+  // Auto-calculate surplus when salary or expenses change
   useEffect(() => {
-    if (state.user.hasCompletedOnboarding) {
-      loadData();
-    }
-  }, [state.user.income, state.user.expenses]);
+    const numericSalary = parseFloat(salary) || 0;
+    const totalExpenses = Object.values(expenses).reduce((sum, expense) => {
+      return sum + (parseFloat(expense) || 0);
+    }, 0);
+    setSurplus(numericSalary - totalExpenses);
+  }, [salary, expenses]);
 
-  const loadData = async () => {
+  const expenseCategories = [
+    { key: 'rent', label: 'Rent/EMI', icon: Receipt },
+    { key: 'emi', label: 'Other EMIs', icon: DollarSign },
+    { key: 'food', label: 'Food & Groceries', icon: PiggyBank },
+    { key: 'transport', label: 'Transport', icon: TrendingUp },
+    { key: 'utilities', label: 'Utilities', icon: Wallet },
+    { key: 'entertainment', label: 'Entertainment', icon: Calendar },
+    { key: 'other', label: 'Other', icon: Target },
+  ];
+
+  const handleCalculate = async () => {
+    if (!salary || parseFloat(salary) <= 0) {
+      Alert.alert('Error', 'Please enter a valid salary');
+      return;
+    }
+
+    if (!goal || parseFloat(goal) <= 0) {
+      Alert.alert('Error', 'Please enter a valid goal amount');
+      return;
+    }
+
     setLoading(true);
     try {
-      const surplus = calculateSurplus();
+      const numericSalary = parseFloat(salary);
+      const numericGoal = parseFloat(goal);
+      const numericExpenses = {};
       
-      if (surplus > 0) {
-        // Get primary goal or use default
-        const primaryGoal = state.goals.length > 0 ? state.goals[0] : { amount: 100000 };
-        
-        // Calculate savings
-        const savingsResponse = await api.calculateSavings(
-          state.user.income,
-          state.user.expenses,
-          primaryGoal.amount
-        );
-        setSavingsData(savingsResponse);
+      Object.keys(expenses).forEach(key => {
+        numericExpenses[key] = parseFloat(expenses[key]) || 0;
+      });
 
-        // Calculate investment projections
-        const investmentResponse = await api.calculateInvestments(
-          surplus,
-          primaryGoal.amount,
-          state.settings.investmentRates
-        );
-        setInvestmentData(investmentResponse);
+      // Save to context
+      dispatch({
+        type: actions.SET_USER_DATA,
+        payload: {
+          income: numericSalary,
+          expenses: numericExpenses,
+          hasCompletedOnboarding: true,
+        },
+      });
 
-        // Get improvement tips
-        const tipsResponse = await api.getImprovementTips(
-          state.user.expenses,
-          state.user.income,
-          primaryGoal.amount
-        );
-        setTips(tipsResponse.tips || []);
-      }
+      // Call backend APIs
+      const [savingsResponse, investmentResponse, tipsResponse] = await Promise.all([
+        api.calculateSavings(numericSalary, numericExpenses, numericGoal),
+        api.calculateInvestments(surplus, numericGoal, state.settings.investmentRates),
+        api.getImprovementTips(numericExpenses, numericSalary, numericGoal)
+      ]);
+
+      setCalculatedData(savingsResponse);
+      setInvestmentData(investmentResponse);
+      setTips(tipsResponse.tips || []);
+
     } catch (error) {
-      console.error('Error loading data:', error);
-      Alert.alert('Error', 'Failed to load data. Please check your connection.');
+      console.error('Error calculating:', error);
+      Alert.alert('Error', 'Failed to calculate projections. Please check your connection.');
     } finally {
       setLoading(false);
     }
@@ -93,25 +130,148 @@ const PlanScreen = ({ navigation }) => {
     return remainingMonths > 0 ? `${years}y ${remainingMonths}m` : `${years} years`;
   };
 
-  const renderSummaryCard = (title, value, icon, color, subtitle) => {
-    const IconComponent = icon;
-    return (
-      <View style={[styles.summaryCard, { borderLeftColor: color }]}>
-        <View style={styles.summaryCardHeader}>
-          <IconComponent size={24} color={color} />
-          <Text style={styles.summaryCardTitle}>{title}</Text>
+  const renderInputForm = () => (
+    <View style={styles.inputSection}>
+      <Text style={styles.sectionTitle}>Financial Planning Calculator</Text>
+      
+      {/* Salary Input */}
+      <View style={styles.inputGroup}>
+        <Text style={styles.inputLabel}>Monthly Salary</Text>
+        <View style={styles.inputWrapper}>
+          <DollarSign size={20} color="#6B7280" />
+          <TextInput
+            style={styles.textInput}
+            placeholder="Enter your monthly salary"
+            value={salary}
+            onChangeText={setSalary}
+            keyboardType="numeric"
+          />
         </View>
-        <Text style={styles.summaryCardValue}>{value}</Text>
-        {subtitle && <Text style={styles.summaryCardSubtitle}>{subtitle}</Text>}
+      </View>
+
+      {/* Goal Input */}
+      <View style={styles.inputGroup}>
+        <Text style={styles.inputLabel}>Savings Goal</Text>
+        <View style={styles.inputWrapper}>
+          <Target size={20} color="#6B7280" />
+          <TextInput
+            style={styles.textInput}
+            placeholder="Enter your savings goal"
+            value={goal}
+            onChangeText={setGoal}
+            keyboardType="numeric"
+          />
+        </View>
+      </View>
+
+      {/* Expenses Section */}
+      <Text style={styles.subSectionTitle}>Monthly Expenses</Text>
+      {expenseCategories.map((category) => {
+        const IconComponent = category.icon;
+        return (
+          <View key={category.key} style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>{category.label}</Text>
+            <View style={styles.inputWrapper}>
+              <IconComponent size={20} color="#6B7280" />
+              <TextInput
+                style={styles.textInput}
+                placeholder="₹0"
+                value={expenses[category.key]}
+                onChangeText={(value) => 
+                  setExpenses(prev => ({ ...prev, [category.key]: value }))
+                }
+                keyboardType="numeric"
+              />
+            </View>
+          </View>
+        );
+      })}
+
+      {/* Auto-calculated Surplus */}
+      <View style={styles.surplusDisplay}>
+        <Text style={styles.surplusLabel}>Available for Savings:</Text>
+        <Text style={[
+          styles.surplusValue, 
+          surplus < 0 ? styles.surplusNegative : styles.surplusPositive
+        ]}>
+          {formatCurrency(surplus)}
+        </Text>
+      </View>
+
+      {/* Calculate Button */}
+      <TouchableOpacity 
+        style={[styles.calculateButton, surplus <= 0 && styles.calculateButtonDisabled]} 
+        onPress={handleCalculate}
+        disabled={loading || surplus <= 0}
+      >
+        {loading ? (
+          <ActivityIndicator size="small" color="#fff" />
+        ) : (
+          <>
+            <Calculator size={20} color="#fff" />
+            <Text style={styles.calculateButtonText}>Calculate Projections</Text>
+          </>
+        )}
+      </TouchableOpacity>
+
+      {surplus <= 0 && (
+        <Text style={styles.warningText}>
+          Reduce expenses to enable savings calculations
+        </Text>
+      )}
+    </View>
+  );
+
+  const renderSavingsTimeline = () => {
+    if (!calculatedData) return null;
+
+    return (
+      <View style={styles.resultsSection}>
+        <Text style={styles.sectionTitle}>Savings Timeline</Text>
+        
+        <View style={styles.timelineCard}>
+          <Text style={styles.timelineTitle}>Plain Savings (No Investment)</Text>
+          <Text style={styles.timelineValue}>
+            {formatTimeToGoal(calculatedData.timeToGoalMonths)}
+          </Text>
+          <Text style={styles.timelineSubtext}>
+            Monthly savings: {formatCurrency(calculatedData.savingsPerMonth)}
+          </Text>
+        </View>
       </View>
     );
   };
 
-  const renderComparisonChart = () => {
-    if (!investmentData || !savingsData) return null;
+  const renderInvestmentOptions = () => {
+    if (!investmentData) return null;
+
+    return (
+      <View style={styles.resultsSection}>
+        <Text style={styles.sectionTitle}>Investment Options Timeline</Text>
+        
+        {investmentData.comparisonVsSavings.map((option, index) => (
+          <View key={index} style={styles.investmentCard}>
+            <View style={styles.investmentHeader}>
+              <Text style={styles.investmentName}>{option.name}</Text>
+              <Text style={styles.investmentRate}>{option.annualRate}% p.a.</Text>
+            </View>
+            <Text style={styles.investmentTime}>
+              {formatTimeToGoal(option.timeToGoalMonths)}
+            </Text>
+            <Text style={styles.timeSaved}>
+              {option.timeSaved > 0 && `${option.timeSaved} months faster`}
+            </Text>
+          </View>
+        ))}
+      </View>
+    );
+  };
+
+  const renderChart = () => {
+    if (!calculatedData || !investmentData) return null;
 
     const months = Array.from({ length: 24 }, (_, i) => i + 1);
-    const savingsLine = months.map(month => savingsData.savingsPerMonth * month);
+    const savingsLine = months.map(month => calculatedData.savingsPerMonth * month);
     const bestInvestment = investmentData.comparisonVsSavings[0];
     const investmentRate = bestInvestment?.annualRate || 11;
     
@@ -120,7 +280,7 @@ const PlanScreen = ({ navigation }) => {
       const monthlyRate = investmentRate / 100 / 12;
       let amount = 0;
       for (let i = 0; i < month; i++) {
-        amount = amount * (1 + monthlyRate) + savingsData.savingsPerMonth;
+        amount = amount * (1 + monthlyRate) + calculatedData.savingsPerMonth;
       }
       return Math.round(amount);
     });
@@ -139,12 +299,12 @@ const PlanScreen = ({ navigation }) => {
           strokeWidth: 2,
         },
       ],
-      legend: ['Savings Only', 'With Investment'],
+      legend: ['Savings Only', `Best Investment (${bestInvestment?.name})`],
     };
 
     return (
       <View style={styles.chartContainer}>
-        <Text style={styles.chartTitle}>Savings vs Investment Growth</Text>
+        <Text style={styles.chartTitle}>Growth Comparison</Text>
         <LineChart
           data={chartData}
           width={width - 40}
@@ -173,147 +333,40 @@ const PlanScreen = ({ navigation }) => {
     if (tips.length === 0) return null;
 
     return (
-      <View style={styles.tipsContainer}>
+      <View style={styles.tipsSection}>
         <View style={styles.tipsHeader}>
           <Lightbulb size={20} color="#f59e0b" />
           <Text style={styles.tipsTitle}>Improvement Tips</Text>
         </View>
         {tips.slice(0, 3).map((tip, index) => (
-          <TouchableOpacity key={index} style={styles.tipCard}>
+          <View key={index} style={styles.tipCard}>
             <Text style={styles.tipText}>{tip.suggestion}</Text>
             {tip.timeSavedMonths && (
               <Text style={styles.tipBenefit}>
-                Save {tip.timeSavedMonths} months
+                💡 Save {tip.timeSavedMonths} months faster
               </Text>
             )}
-          </TouchableOpacity>
+          </View>
         ))}
       </View>
     );
   };
 
-  if (!state.user.hasCompletedOnboarding) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.onboardingPrompt}>
-          <PiggyBank size={80} color="#3B82F6" />
-          <Text style={styles.onboardingTitle}>Welcome to Savings Planner!</Text>
-          <Text style={styles.onboardingSubtitle}>
-            Complete the setup to start planning your financial future
-          </Text>
-          <TouchableOpacity
-            style={styles.onboardingButton}
-            onPress={() => navigation.navigate('Onboarding')}
-          >
-            <Text style={styles.onboardingButtonText}>Get Started</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  const surplus = calculateSurplus();
-
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        refreshControl={<RefreshControl refreshing={loading} onRefresh={loadData} />}
-      >
-        {/* Summary Cards */}
-        <View style={styles.summaryGrid}>
-          {renderSummaryCard(
-            'Monthly Income',
-            formatCurrency(state.user.income),
-            Wallet,
-            '#10b981'
-          )}
-          {renderSummaryCard(
-            'Total Expenses',
-            formatCurrency(Object.values(state.user.expenses).reduce((sum, exp) => sum + exp, 0)),
-            Receipt,
-            '#ef4444'
-          )}
-          {renderSummaryCard(
-            'Available Surplus',
-            formatCurrency(surplus),
-            PiggyBank,
-            '#3B82F6',
-            surplus <= 0 ? 'Consider reducing expenses' : 'Great! You can save'
-          )}
-        </View>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        {/* Always show input form */}
+        {renderInputForm()}
 
-        {/* Savings Recommendations */}
-        {surplus > 0 && savingsData && (
-          <View style={styles.recommendationsContainer}>
-            <Text style={styles.sectionTitle}>Recommended Savings</Text>
-            <View style={styles.recommendationGrid}>
-              <View style={styles.recommendationCard}>
-                <Calendar size={20} color="#3B82F6" />
-                <Text style={styles.recommendationLabel}>Daily</Text>
-                <Text style={styles.recommendationValue}>
-                  {formatCurrency(savingsData.savingsPerDay)}
-                </Text>
-              </View>
-              <View style={styles.recommendationCard}>
-                <Clock size={20} color="#10b981" />
-                <Text style={styles.recommendationLabel}>Weekly</Text>
-                <Text style={styles.recommendationValue}>
-                  {formatCurrency(savingsData.savingsPerWeek)}
-                </Text>
-              </View>
-            </View>
-          </View>
+        {/* Show results only after calculation */}
+        {calculatedData && (
+          <>
+            {renderSavingsTimeline()}
+            {renderInvestmentOptions()}
+            {renderChart()}
+            {renderTips()}
+          </>
         )}
-
-        {/* Goal Progress */}
-        {state.goals.length > 0 && savingsData && investmentData && (
-          <View style={styles.goalContainer}>
-            <Text style={styles.sectionTitle}>Primary Goal Progress</Text>
-            <View style={styles.goalCard}>
-              <Text style={styles.goalTitle}>{state.goals[0].title || 'My Goal'}</Text>
-              <Text style={styles.goalAmount}>{formatCurrency(state.goals[0].amount)}</Text>
-              
-              <View style={styles.timeComparisonContainer}>
-                <View style={styles.timeComparison}>
-                  <Text style={styles.timeLabel}>Savings Only</Text>
-                  <Text style={styles.timeValue}>
-                    {formatTimeToGoal(savingsData.timeToGoalMonths)}
-                  </Text>
-                </View>
-                <View style={styles.timeComparison}>
-                  <Text style={styles.timeLabel}>Best Investment</Text>
-                  <Text style={[styles.timeValue, styles.timeValueGreen]}>
-                    {investmentData.comparisonVsSavings[0] && 
-                     formatTimeToGoal(investmentData.comparisonVsSavings[0].timeToGoalMonths)}
-                  </Text>
-                </View>
-              </View>
-            </View>
-          </View>
-        )}
-
-        {/* Comparison Chart */}
-        {renderComparisonChart()}
-
-        {/* Tips */}
-        {renderTips()}
-
-        {/* Quick Actions */}
-        <View style={styles.actionsContainer}>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => navigation.navigate('Goals')}
-          >
-            <Text style={styles.actionButtonText}>Manage Goals</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.actionButton, styles.actionButtonSecondary]}
-            onPress={() => navigation.navigate('Compare')}
-          >
-            <Text style={styles.actionButtonTextSecondary}>Compare Options</Text>
-          </TouchableOpacity>
-        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -327,154 +380,173 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 16,
   },
-  onboardingPrompt: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+  inputSection: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
     padding: 20,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  onboardingTitle: {
-    fontSize: 24,
+  sectionTitle: {
+    fontSize: 20,
     fontWeight: 'bold',
-    color: '#1e293b',
-    marginTop: 20,
+    color: '#1F2937',
+    marginBottom: 20,
     textAlign: 'center',
   },
-  onboardingSubtitle: {
+  subSectionTitle: {
     fontSize: 16,
-    color: '#64748b',
-    textAlign: 'center',
-    marginTop: 10,
-    marginBottom: 30,
+    fontWeight: '600',
+    color: '#374151',
+    marginTop: 20,
+    marginBottom: 12,
   },
-  onboardingButton: {
+  inputGroup: {
+    marginBottom: 16,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#374151',
+    marginBottom: 8,
+  },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f9fafb',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  textInput: {
+    flex: 1,
+    marginLeft: 8,
+    fontSize: 16,
+    color: '#111827',
+  },
+  surplusDisplay: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#f3f4f6',
+    padding: 16,
+    borderRadius: 8,
+    marginVertical: 16,
+  },
+  surplusLabel: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#374151',
+  },
+  surplusValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  surplusPositive: {
+    color: '#10b981',
+  },
+  surplusNegative: {
+    color: '#ef4444',
+  },
+  calculateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#3B82F6',
     paddingVertical: 16,
-    paddingHorizontal: 32,
     borderRadius: 12,
+    marginTop: 10,
   },
-  onboardingButtonText: {
+  calculateButtonDisabled: {
+    backgroundColor: '#9CA3AF',
+  },
+  calculateButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+    marginLeft: 8,
   },
-  summaryGrid: {
-    marginBottom: 20,
+  warningText: {
+    textAlign: 'center',
+    color: '#ef4444',
+    fontSize: 14,
+    marginTop: 8,
+    fontStyle: 'italic',
   },
-  summaryCard: {
+  resultsSection: {
     backgroundColor: '#fff',
     borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    borderLeftWidth: 4,
+    padding: 20,
+    marginBottom: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
   },
-  summaryCardHeader: {
+  timelineCard: {
+    backgroundColor: '#f8fafc',
+    padding: 16,
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#3B82F6',
+  },
+  timelineTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 8,
+  },
+  timelineValue: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 4,
+  },
+  timelineSubtext: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  investmentCard: {
+    backgroundColor: '#f0fdf4',
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#10b981',
+  },
+  investmentHeader: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 8,
   },
-  summaryCardTitle: {
+  investmentName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  investmentRate: {
     fontSize: 14,
-    color: '#64748b',
-    marginLeft: 8,
+    color: '#059669',
     fontWeight: '500',
   },
-  summaryCardValue: {
+  investmentTime: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#1e293b',
-  },
-  summaryCardSubtitle: {
-    fontSize: 12,
-    color: '#64748b',
-    marginTop: 4,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1e293b',
-    marginBottom: 12,
-  },
-  recommendationsContainer: {
-    marginBottom: 20,
-  },
-  recommendationGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  recommendationCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-    flex: 0.48,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  recommendationLabel: {
-    fontSize: 14,
-    color: '#64748b',
-    marginTop: 8,
+    color: '#065f46',
     marginBottom: 4,
   },
-  recommendationValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#1e293b',
-  },
-  goalContainer: {
-    marginBottom: 20,
-  },
-  goalCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  goalTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1e293b',
-  },
-  goalAmount: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#3B82F6',
-    marginVertical: 8,
-  },
-  timeComparisonContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 16,
-  },
-  timeComparison: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  timeLabel: {
-    fontSize: 12,
-    color: '#64748b',
-    marginBottom: 4,
-  },
-  timeValue: {
+  timeSaved: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#1e293b',
-  },
-  timeValueGreen: {
-    color: '#10b981',
+    color: '#059669',
+    fontWeight: '500',
   },
   chartContainer: {
     backgroundColor: '#fff',
@@ -490,14 +562,14 @@ const styles = StyleSheet.create({
   chartTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1e293b',
+    color: '#1F2937',
     marginBottom: 16,
     textAlign: 'center',
   },
   chart: {
     borderRadius: 16,
   },
-  tipsContainer: {
+  tipsSection: {
     backgroundColor: '#fff',
     borderRadius: 12,
     padding: 16,
@@ -516,7 +588,7 @@ const styles = StyleSheet.create({
   tipsTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1e293b',
+    color: '#1F2937',
     marginLeft: 8,
   },
   tipCard: {
@@ -529,39 +601,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#92400e',
     fontWeight: '500',
+    marginBottom: 4,
   },
   tipBenefit: {
     fontSize: 12,
     color: '#059669',
-    marginTop: 4,
-    fontWeight: '600',
-  },
-  actionsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 10,
-  },
-  actionButton: {
-    backgroundColor: '#3B82F6',
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-    flex: 0.48,
-    alignItems: 'center',
-  },
-  actionButtonSecondary: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#3B82F6',
-  },
-  actionButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  actionButtonTextSecondary: {
-    color: '#3B82F6',
-    fontSize: 14,
     fontWeight: '600',
   },
 });
