@@ -5,12 +5,11 @@ A comprehensive fullstack application built with React Native (Expo) frontend an
 ## 🚀 Features
 
 ### Frontend (React Native + Expo)
-- **Onboarding Flow**: Welcome screens with income and expense input
-- **Plan Dashboard**: Summary cards showing income, expenses, and savings potential
-- **Investment Comparison**: Interactive charts comparing savings vs investment returns
-- **Goals Management**: Create, edit, and track multiple savings goals
-- **Educational Content**: Learn about different investment options
-- **Settings**: Customize investment rates, backup/restore data, dark mode
+- **Home Calculator**: Clean input form for salary, expenses, and goals
+- **Current Market Rates**: Display and edit investment interest rates
+- **Dynamic Results**: Show savings timeline and investment options after calculation
+- **Investment Comparison**: Interactive charts comparing different investment options
+- **Educational Content**: Learn about different investment options with expandable articles
 
 ### Backend (Node.js + Express)
 - **Dynamic Calculations**: Real-time savings and investment projections
@@ -37,13 +36,9 @@ A comprehensive fullstack application built with React Native (Expo) frontend an
 ## 📱 Screenshots & Features
 
 ### Key Screens
-1. **OnboardingScreen** - Welcome flow with income/expense setup
-2. **PlanScreen** - Main dashboard with savings summary and charts
-3. **CompareScreen** - Investment comparison with interactive charts
-4. **GoalsScreen** - Manage multiple savings goals
-5. **GoalDetailScreen** - Detailed analysis for individual goals
-6. **LearnScreen** - Educational content about investments
-7. **SettingsScreen** - App configuration and data management
+1. **PlanScreen (Home)** - Main calculator with input form, current market rates, and results
+2. **CompareScreen** - Investment comparison with interactive charts
+3. **LearnScreen** - Educational content about investments
 
 ### Charts & Visualizations
 - **Line Charts**: Growth projections over time

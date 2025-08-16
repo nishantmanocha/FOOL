@@ -9,9 +9,7 @@ import { StatusBar } from 'expo-status-bar';
 import { 
   PiggyBank, 
   BarChart3, 
-  Target, 
   BookOpen, 
-  Settings,
   Home
 } from 'lucide-react-native';
 
@@ -19,10 +17,7 @@ import {
 import OnboardingScreen from './src/screens/OnboardingScreen';
 import PlanScreen from './src/screens/PlanScreen';
 import CompareScreen from './src/screens/CompareScreen';
-import GoalsScreen from './src/screens/GoalsScreen';
 import LearnScreen from './src/screens/LearnScreen';
-import SettingsScreen from './src/screens/SettingsScreen';
-import GoalDetailScreen from './src/screens/GoalDetailScreen';
 
 // Context
 import { AppProvider } from './src/context/AppContext';
@@ -30,27 +25,7 @@ import { AppProvider } from './src/context/AppContext';
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
 
-// Stack navigator for Goals flow
-function GoalsStack() {
-  return (
-    <Stack.Navigator>
-      <Stack.Screen 
-        name="GoalsList" 
-        component={GoalsScreen} 
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen 
-        name="GoalDetail" 
-        component={GoalDetailScreen}
-        options={{ 
-          title: 'Goal Details',
-          headerStyle: { backgroundColor: '#3B82F6' },
-          headerTintColor: '#fff'
-        }}
-      />
-    </Stack.Navigator>
-  );
-}
+// Removed Goals stack navigator
 
 // Main Tab Navigator
 function MainTabs() {
@@ -61,15 +36,11 @@ function MainTabs() {
           let IconComponent;
 
           if (route.name === 'Plan') {
-            IconComponent = PiggyBank;
+            IconComponent = Home;
           } else if (route.name === 'Compare') {
             IconComponent = BarChart3;
-          } else if (route.name === 'Goals') {
-            IconComponent = Target;
           } else if (route.name === 'Learn') {
             IconComponent = BookOpen;
-          } else if (route.name === 'Settings') {
-            IconComponent = Settings;
           }
 
           return <IconComponent size={size} color={color} />;
@@ -88,7 +59,7 @@ function MainTabs() {
       <Tab.Screen 
         name="Plan" 
         component={PlanScreen}
-        options={{ title: 'My Plan' }}
+        options={{ title: 'Home' }}
       />
       <Tab.Screen 
         name="Compare" 
@@ -96,22 +67,9 @@ function MainTabs() {
         options={{ title: 'Compare Options' }}
       />
       <Tab.Screen 
-        name="Goals" 
-        component={GoalsStack}
-        options={{ 
-          title: 'Savings Goals',
-          headerShown: false
-        }}
-      />
-      <Tab.Screen 
         name="Learn" 
         component={LearnScreen}
         options={{ title: 'Learn & Tips' }}
-      />
-      <Tab.Screen 
-        name="Settings" 
-        component={SettingsScreen}
-        options={{ title: 'Settings' }}
       />
     </Tab.Navigator>
   );

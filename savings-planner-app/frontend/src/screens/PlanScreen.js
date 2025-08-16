@@ -9,6 +9,7 @@ import {
   Alert,
   Dimensions,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -22,6 +23,9 @@ import {
   Lightbulb,
   Clock,
   Target,
+  Edit3,
+  Percent,
+  X,
 } from 'lucide-react-native';
 import { LineChart } from 'react-native-chart-kit';
 import { useApp } from '../context/AppContext';
@@ -48,6 +52,8 @@ const PlanScreen = ({ navigation }) => {
   const [tips, setTips] = useState([]);
   const [loading, setLoading] = useState(false);
   const [surplus, setSurplus] = useState(0);
+  const [ratesModalVisible, setRatesModalVisible] = useState(false);
+  const [editingRates, setEditingRates] = useState({});
 
   // Auto-calculate surplus when salary or expenses change
   useEffect(() => {
@@ -116,6 +122,27 @@ const PlanScreen = ({ navigation }) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleEditRates = () => {
+    setEditingRates({ ...state.settings.investmentRates });
+    setRatesModalVisible(true);
+  };
+
+  const handleSaveRates = () => {
+    dispatch({
+      type: actions.UPDATE_SETTINGS,
+      payload: { investmentRates: editingRates },
+    });
+    setRatesModalVisible(false);
+  };
+
+  const handleRateChange = (instrument, value) => {
+    const numericValue = parseFloat(value) || 0;
+    setEditingRates(prev => ({
+      ...prev,
+      [instrument]: numericValue,
+    }));
   };
 
   const formatCurrency = (amount) => {
@@ -352,11 +379,107 @@ const PlanScreen = ({ navigation }) => {
     );
   };
 
+  const renderCurrentRates = () => (
+    <View style={styles.ratesSection}>
+      <View style={styles.ratesHeader}>
+        <Text style={styles.sectionTitle}>Current Market Rates</Text>
+        <TouchableOpacity style={styles.editButton} onPress={handleEditRates}>
+          <Edit3 size={16} color="#3B82F6" />
+          <Text style={styles.editButtonText}>Edit</Text>
+        </TouchableOpacity>
+      </View>
+      
+      <View style={styles.ratesGrid}>
+        {Object.entries(state.settings.investmentRates).map(([key, rate]) => (
+          <View key={key} style={styles.rateCard}>
+            <Text style={styles.rateName}>
+              {key === 'ppf' ? 'PPF' :
+               key === 'fd' ? 'Fixed Deposit' :
+               key === 'rd' ? 'Recurring Deposit' :
+               key === 'mutualFunds' ? 'Mutual Funds' :
+               key === 'niftyETF' ? 'Nifty ETF' :
+               key === 'goldETF' ? 'Gold ETF' :
+               key === 'sgb' ? 'Sovereign Gold Bond' : key}
+            </Text>
+            <Text style={styles.rateValue}>{rate}% p.a.</Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+
+  const renderRatesModal = () => (
+    <Modal
+      visible={ratesModalVisible}
+      animationType="slide"
+      transparent={true}
+      onRequestClose={() => setRatesModalVisible(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Edit Interest Rates</Text>
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={() => setRatesModalVisible(false)}
+            >
+              <X size={24} color="#6B7280" />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={styles.modalContent}>
+            {Object.entries(editingRates).map(([instrument, rate]) => (
+              <View key={instrument} style={styles.rateInputItem}>
+                <Text style={styles.rateInputLabel}>
+                  {instrument === 'ppf' ? 'PPF' :
+                   instrument === 'fd' ? 'Fixed Deposit' :
+                   instrument === 'rd' ? 'Recurring Deposit' :
+                   instrument === 'mutualFunds' ? 'Mutual Funds' :
+                   instrument === 'niftyETF' ? 'Nifty ETF' :
+                   instrument === 'goldETF' ? 'Gold ETF' :
+                   instrument === 'sgb' ? 'Sovereign Gold Bond' : instrument}
+                </Text>
+                <View style={styles.rateInputContainer}>
+                  <TextInput
+                    style={styles.rateInput}
+                    value={rate.toString()}
+                    onChangeText={(value) => handleRateChange(instrument, value)}
+                    keyboardType="numeric"
+                    placeholder="0.0"
+                  />
+                  <Percent size={16} color="#6B7280" style={styles.percentIcon} />
+                </View>
+              </View>
+            ))}
+          </ScrollView>
+
+          <View style={styles.modalActions}>
+            <TouchableOpacity
+              style={styles.cancelButton}
+              onPress={() => setRatesModalVisible(false)}
+            >
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.saveButton}
+              onPress={handleSaveRates}
+            >
+              <Text style={styles.saveButtonText}>Save Changes</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Always show input form */}
         {renderInputForm()}
+
+        {/* Always show current market rates */}
+        {renderCurrentRates()}
 
         {/* Show results only after calculation */}
         {calculatedData && (
@@ -368,6 +491,9 @@ const PlanScreen = ({ navigation }) => {
           </>
         )}
       </ScrollView>
+
+      {/* Rates editing modal */}
+      {renderRatesModal()}
     </SafeAreaView>
   );
 };
@@ -607,6 +733,159 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#059669',
     fontWeight: '600',
+  },
+  ratesSection: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  ratesHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  editButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  editButtonText: {
+    color: '#3B82F6',
+    fontSize: 14,
+    fontWeight: '500',
+    marginLeft: 4,
+  },
+  ratesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  rateCard: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 8,
+    width: '48%',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  rateName: {
+    fontSize: 12,
+    color: '#64748b',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  rateValue: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#3B82F6',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContainer: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1F2937',
+  },
+  closeButton: {
+    padding: 4,
+  },
+  modalContent: {
+    padding: 20,
+  },
+  rateInputItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  rateInputLabel: {
+    fontSize: 16,
+    color: '#374151',
+    flex: 1,
+  },
+  rateInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    minWidth: 80,
+  },
+  rateInput: {
+    fontSize: 16,
+    color: '#1F2937',
+    textAlign: 'right',
+    flex: 1,
+  },
+  percentIcon: {
+    marginLeft: 4,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  cancelButton: {
+    flex: 1,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginRight: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#6B7280',
+  },
+  saveButton: {
+    flex: 1,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginLeft: 8,
+    borderRadius: 8,
+    backgroundColor: '#3B82F6',
+  },
+  saveButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
   },
 });
 
